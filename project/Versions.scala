@@ -7,4 +7,5 @@ object Versions {
   val zioKafkaVersion                 = "2.1.1"
   val logbackVersion                  = "1.4.6"
   val typeSafeConfigVersion           = "1.4.2"
+  val scalaLoggingVersion             = "3.9.5"
 }

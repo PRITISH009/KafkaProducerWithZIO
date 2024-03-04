@@ -1,37 +1,13 @@
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
-import org.apache.kafka.clients.producer.ProducerRecord
 import utils.ApplicationLogger
-import zio.kafka.producer.{Producer, ProducerSettings}
+import utils.ConfigUtils.{Arg, extractArg}
+import utils.ProducerUtils.{getProducerLayer, getProducerRecord, getProducerSettings}
+import zio.kafka.producer.Producer
+import zio.kafka.serde.Serde
 import zio.{RIO, Task, ZIO, ZIOAppArgs, ZIOAppDefault, ZLayer}
 
 object KafkaProducerJob extends ZIOAppDefault with ApplicationLogger {
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = zioSlf4jLogger
-
-  val producerSettings: ProducerSettings = ProducerSettings(List("kafka-service:9092"))
-    .withProperty("auto.offset.reset", "latest")
-    .withProperty("security.protocol", "SSL")
-    .withProperty("ssl.endpoint.identification.algorithm", "")
-
-  private val producerLayer: ZLayer[Any, Throwable, Producer] =
-    ZLayer.scoped(
-      Producer.make(
-        producerSettings
-      )
-    )
-
-  case class Arg(key: String, value: String)
-
-  def extractArg(arg: String): Arg = {
-    val pattern = "-D(.*)=(.*)".r
-    arg match {
-      case pattern(key, value) => Arg(key, value)
-    }
-  }
-
-  def produceRandomRecord(config: Config): ProducerRecord[Int, String] = {
-    val topicName: String = config.getString("kafkaTopic")
-    new ProducerRecord(topicName, 1, "")
-  }
 
   def readAllArguments(): RIO[ZIOAppArgs, List[Arg]] = for {
     _ <- ZIO.logInfo("Reading Program Arguments")
@@ -60,10 +36,27 @@ object KafkaProducerJob extends ZIOAppDefault with ApplicationLogger {
   } yield(config)
 
   override def run: RIO[ZIOAppArgs, Unit] = for {
-    _       <- ZIO.logInfo("Starting Producer Job")
-    args    <- readAllArguments()
-    config  <- createConfig(args)
-    _       <- ZIO.logInfo(s"Got Topic Name - ${config.getString("topic")}")
-    _       <- ZIO.logInfo("Ending Producer Job")
+    _ <- ZIO.logInfo("Starting Producer Job")
+    args <- readAllArguments()
+    config <- createConfig(args)
+
+    _ <- ZIO.logInfo("Creating Producer Settings")
+    producerSettings <- ZIO.attempt(getProducerSettings(config))
+    _ <- ZIO.logInfo(s"Producer Settings - $producerSettings")
+
+    _ <- ZIO.logInfo("Creating Producer Layer")
+    producerLayer <- ZIO.attempt(getProducerLayer(producerSettings))
+
+    _ <- ZIO.logInfo("Creating Producer Record")
+    producerRecord <- ZIO.attempt(getProducerRecord(config))
+    _ <- ZIO.logInfo(s"Created Producer Record - $producerRecord")
+
+    _ <- ZIO.logInfo("Creating Producer")
+    _ <- Producer
+      .produce(producerRecord, Serde.int, Serde.string)
+      .provideLayer(producerLayer)
+
+    _ <- ZIO.logInfo(s"Ended Producing Record")
+    _ <- ZIO.logInfo("Ending Producer Job")
   } yield ()
 }
