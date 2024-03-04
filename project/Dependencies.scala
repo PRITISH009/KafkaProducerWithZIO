@@ -13,4 +13,8 @@ object Dependencies {
   lazy val logLibs: List[ModuleID] = List(
     "ch.qos.logback"         % "logback-classic"          % logbackVersion,
   )
+
+  lazy val configLibs: List[ModuleID] = List(
+    "com.typesafe"          %  "config"        % typeSafeConfigVersion,
+  )
 }
